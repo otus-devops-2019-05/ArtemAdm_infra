@@ -1,47 +1,164 @@
 # ArtemAdm_infra
 
-# Выполнено ДЗ №3
+# Выполнено ДЗ №4
 
  - [v] Основное ДЗ
 
 ## В процессе сделано:
- - Пункт 1 //Создание учетной записи в GCP
- - Пункт 2 //Создание в веб-интерфейсе инстансов ВМ и подключение к ним по SSH
- - Пункт 3 //Рассмотрим варианты подключения к хостам через бастион-хости VPN
- - Пункт 4 //Самостоятельная работа
-
-## Создание учетной записи в GCP
-   Пунк легкий, никаких проблем в создании учетной записи нет.
-
-## Создание в веб-интерфейсе инстансов ВМ и подключение к ним по SSH
-   Работа с GCE, так же проблем не было. Создание учетной записи, и конфигурация её от железа до настройки сети.
-   После добавления ключа SSH, не возникло проблем в подключении. Ключ был создан ранее для досупа к GitHub
-   Нужно было создать 2 ВМ: bastionhost с белым статическим IP и someinternalhost с серым IP.
-   И тестирования сквозного подключения на сервер someinternalhost
-
-## Рассмотрим варианты подключения к хостам через бастион-хости VPN
-   В задании необходимо установить VPN-сервер Pritunl (при помощи скрипта) и настройкой его.
-   Для работы нужно было разрешить соединения на HTTP, HTTPS и порт сервера VPN у меня UDP-12567  при помощи тегов
-   Был создан пользователь test, оганизация и сервер.
-   Подключение прошло успешно к серверу ВПН и подключение по ssh к серверу someinternalhost
-
+ - Пункт 1 //Установим и настроим gcloud для работы с нашим аккаунтом;
+ - Пункт 2 //Создадим хост с помощью gcloud;
+ - Пункт 3 //Установим на нем ruby для работы приложения;
+ - Пункт 4 //Установим MongoDB и запустим;
+ - Пункт 5 //Задеплоим тестовое приложение, запустим и проверим его работу;
+ - Пункт 6 //Самостоятельная работа
+ - Пункт 7 //Дополнительное задание
+## Установим и настроим gcloud для работы с нашим аккаунтом;
+   Для установки требуеться python2.7.9+
+   скачиваем ПО
+   wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-252.0.0-linux-x86_64.tar.gz
+   Запускаем установщик   
+   ./google-cloud-sdk/install.sh
+   Запускаем init
+   ./google-cloud-sdk/bin/gcloud init
+   На google аккаунте поулчаем ключик для аунтификации
+   Проверяем что наш акк подтянулся
+   gcloud auth list
+   Credentialed Accounts
+   ACTIVE ACCOUNT
+   * art____@gmail.com 
+## Создадим хост с помощью gcloud
+   gcloud compute instances create reddit-app \
+   --boot-disk-size=10GB \
+   --zone europe-west2-b \
+   --image-family ubuntu-1604-lts \
+   --image-project=ubuntu-os-cloud \
+   --machine-type=g1-small \
+   --tags puma-server \
+   --restart-on-failure
+## Устанавливаем Ruby
+   подуключаемся по ssh к хосту
+   ssh -i ~/.ssh/id_pub artemadm@35.246.108.51
+   Обновляемся и устанавливаем Ruby
+   sudo apt update
+   sudo apt install -y ruby-full ruby-bundler build-essential
+## Устанавливаем MongoDB
+   Устанавливаем ключи и добавляем репу
+   sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
+   sudo bash -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list'
+   Обновялем индек и стави mongod
+   sudo apt update
+   sudo apt install -y mongodb-org
+   запускаем mongod и ставим в автостарт
+   sudo systemctl start mongod
+   sudo systemctl enable mongod
+## Деплой приложения
+   Клонируем репу
+   git clone -b monolith https://github.com/express42/reddit.git
+   переходим в скачаную директорию и устанавливаем приложение
+   cd reddit && bundle install
+   запускаем приложени и проверяем что сервер запустился и на каком порту
+   puma -d
+   ps aux | grep puma
+   настраеваем через веб правила фаервола на открытие порта 9292 и привязываем тег
 ## Самостоятельная работа
- - Был иследован способ ProxyJump в ssh. Потребовалось обновить openssh-server
-   до версии 7.3, начиная с этой версии поддерживается данная функция.
-   параметр -J [user@]host[:port]] [-L address] [-l login_name] дает возможность сделать переключение на хост
-   за NAT-ом. Команда получается следующая:
-   ssh -J artemadm@35.234.66.30:22 artemadm@10.156.0.3
-   После двойного ввода пароль от ключа попал на сервер 10.156.0.3 (someinternalhost)
- - Для выполнения задачи "подключиться при помощи записи "ssh someinternalhost"
-   Был создан файл в директории ~/.ssh/config и приведен к следующиму виду:
-   Host someinternalhost
-        HostName 10.156.0.3
-        ProxyJump artemadm@35.234.66.30:22
-        User artemadm
+   создать 3 скрипта:   
+    Скрипт install_ruby.sh
+	#!/bin/bash
+	# Clone
+	git clone -b monolith https://github.com/express42/reddit.git
+	# Install bundle
+	cd reddit
+	bundle install
+	# Start server
+	puma -d
+	# Test app
+	ps aux | grep puma
+	#!/bin/bash
+	sudo apt update
+	sudo apt install -y ruby-full ruby-bundler build-essential
+	echo "Version Ruby:"
+	ruby -v
+	echo "Version Bundler:"
+	bundler -v
+    install_mongodb.sh
+	#!/bin/bash
+	# Add key
+	sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
+	# Add REPO
+	sudo bash -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list'
+	# Refresh APT
+	sudo apt update
+	#Install MongoDB-3.2
+	sudo apt install -y mongodb-org
+	# Start MongoDB
+	sudo systemctl start mongod
+	# Add autostart MongoDB service
+	sudo systemctl enable mongod
+    deploy.sh
+	#!/bin/bash
+	# Clone
+	git clone -b monolith https://github.com/express42/reddit.git
+	# Install bundle
+	cd reddit
+	bundle install
+	# Start server
+	puma -d
+	# Test app
+	ps aux | grep puma
 
-   С этим аллиасом стало возможно подключаться командой с одним параметром ssh someinternalhost
+## Дополнительное задание
+   Создание скрипта startup script. После поднятия инстанса, установка схем приложений
+	startup_script.sh
+	#!/bin/bash
+	# Add key
+	sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 -
+	# Add REPO
+	sudo bash -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xultiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list'
+	# Refresh APT
+	sudo apt update
+	#Install MongoDB-3.2
+	sudo apt install -y mongodb-org
+	# Start MongoDB
+	sudo systemctl start mongod
+	# Add autostart MongoDB service
+	sudo systemctl enable mongod
+	# Status Sevice
+	#sudo systemctl status mongod
+	#!/bin/bash
+	sudo apt update
+	sudo apt install -y ruby-full ruby-bundler build-essential
+	#echo "Version Ruby:"
+	#ruby -v
+	#echo "Vеrsion Bundler:"
+	#bundler -v
+	#!/bin/bash
+	# Clone
+	git clone -b monolith https://github.com/express42/reddit.gi
+	# Install bundle
+	cd reddit
+	bundle install
+	# Start server
+	puma -d
+	# Test app
+	#ps aux | grep puma
+   
+   Команда для запуска gcloud
+    gcloud compute instances create reddit-test \
+    --boot-disk-size=10GB \
+    --zone europe-west2-b \
+    --image-family ubuntu-1604-lts \
+    --image-project=ubuntu-os-cloud \
+    --machine-type=g1-small \
+    --tags puma-server \
+    --metadata-from-file startup-script=/tmp/install.sh \
+    --restart-on-failure
 
+   Создание правила фаервола при помощи gcloud
+    gcloud compute firewall-rules create default-puma-server \
+    --allow=tcp:9292 \
+    --source-ranges=0.0.0.0/0 \
+    --target-tags=puma-server
 #--# Задание
-bastion_IP = 35.234.66.30
-someinternalhost_IP = 10.156.0.3
+testapp_IP = 35.246.108.51
+testapp_port = 9292
 
