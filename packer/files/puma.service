@@ -1,0 +1,13 @@
+[Unit]
+Description=Unit from puma
+After=network.target
+
+[Service]
+Type=simple
+
+WorkingDirectory=/home/appuser/raddit
+ExecStart=/usr/local/bin/pumactl start
+
+[Install]
+WantedBy=multi-user.target
+
