@@ -1,0 +1,10 @@
+{
+  "gcp_builders_project_id": "infra-111304",
+  "gcp_builders_source_image": "ubuntu-1604-lts",
+  "gcp_builders_machine_type": "g1-small",
+  "gcp_builders_disk_size": "10",
+  "gcp_builders_disk_type": "pd-ssd",
+  "gcp_builders_image_description": "Test Infra image HW#5",
+  "gcp_builders_tags": "puma-server"
+}
+

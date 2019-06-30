@@ -1,166 +1,222 @@
 # ArtemAdm_infra
 
-Выполнено ДЗ №4
-[v] Основное ДЗ
-В процессе сделано:
-Пункт 1 //Установим и настроим gcloud для работы с нашим аккаунтом;
-Пункт 2 //Создадим хост с помощью gcloud;
-Пункт 3 //Установим на нем ruby для работы приложения;
-Пункт 4 //Установим MongoDB и запустим;
-Пункт 5 //Задеплоим тестовое приложение, запустим и проверим его работу;
-Пункт 6 //Самостоятельная работа
-Пункт 7 //Дополнительное задание
-Установим и настроим gcloud для работы с нашим аккаунтом;
-Для установки требуеться python2.7.9+
-скачиваем ПО
-wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-252.0.0-linux-x86_64.tar.gz
-Запускаем установщик
-./google-cloud-sdk/install.sh
-Запускаем init
-./google-cloud-sdk/bin/gcloud init
-На google аккаунте поулчаем ключик для аунтификации
-Проверяем что наш акк подтянулся
-gcloud auth list
-Credentialed Accounts
-ACTIVE ACCOUNT
+# Выполнено ДЗ №5 Сборка образов VM при помощи Packer
 
-art____@gmail.com
-Создадим хост с помощью gcloud
-gcloud compute instances create reddit-app 
---boot-disk-size=10GB 
---zone europe-west2-b 
---image-family ubuntu-1604-lts 
---image-project=ubuntu-os-cloud 
---machine-type=g1-small 
---tags puma-server 
---restart-on-failure
+ - [v] Основное ДЗ
+ - [v] Задание со *
 
-Устанавливаем Ruby
-подуключаемся по ssh к хосту
-ssh -i ~/.ssh/id_pub artemadm@35.246.108.51
-Обновляемся и устанавливаем Ruby
-sudo apt update
-sudo apt install -y ruby-full ruby-bundler build-essential
+## В процессе сделано:
+ - Пункт 1 // Установка Packer
+ - Пункт 2 // Создаем Packer template
+ - Пункт 3 // Деплоим приложение
+ - Пункт 4 // Установка зависимостей и запуск приложения
+ - Пункт 5 // Самостоятельные задания
+ - Пункт 6 // Задание со *
 
-Устанавливаем MongoDB
-Устанавливаем ключи и добавляем репу
-sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
-sudo bash -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list'
-Обновялем индек и стави mongod
-sudo apt update
-sudo apt install -y mongodb-org
-запускаем mongod и ставим в автостарт
-sudo systemctl start mongod
-sudo systemctl enable mongod
+##	Пункт 1 //Установка Packer
+	Packer скачиваеться с офф репозитория https://www.packer.io/downloads.html с выбором своей ОЗУ.
+	После скачивания разархивируеться zip командой unzip packer_1.4.2_linux_amd64.zip .
+	Файл packer копируем в переменую $PATH . В моем случчае это /usr/local/bin:
 
-Деплой приложения
-Клонируем репу
-git clone -b monolith https://github.com/express42/reddit.git
-переходим в скачаную директорию и устанавливаем приложение
-cd reddit && bundle install
-запускаем приложени и проверяем что сервер запустился и на каком порту
-puma -d
-ps aux | grep puma
-настраеваем через веб правила фаервола на открытие порта 9292 и привязываем тег
+##      Пункт 2 //Создаем Packer template
+	Создаем папку packer в рабочем каталоге git. В папке файл ubuntu16.json
+	{
+    "builders": [
+        {
+            "type": "googlecompute",
+            "project_id": "infra-189607",
+            "image_name": "reddit-base-{{timestamp}}",
+            "image_family": "reddit-base",
+            "source_image_family": "ubuntu-1604-lts",
+            "zone": "europe-west1-b",
+            "ssh_username": "appuser",
+            "machine_type": "f1-micro"
+        }
+    ],
+    "provisioners": [
+        {
+            "type": "shell",
+            "script": "scripts/install_ruby.sh",
+            "execute_command": "sudo {{.Path}}"
+        },
+        {
+            "type": "shell",
+            "script": "scripts/install_mongodb.sh",
+            "execute_command": "sudo {{.Path}}"
+        }
+    ]
+}
 
-Самостоятельная работа
-создать 3 скрипта:
-Скрипт install_ruby.sh
-#!/bin/bash
-# Clone
-git clone -b monolith https://github.com/express42/reddit.git
-# Install bundle
-cd reddit
-bundle install
-# Start server
-puma -d
-# Test app
-ps aux | grep puma
-#!/bin/bash
-sudo apt update
-sudo apt install -y ruby-full ruby-bundler build-essential
-echo "Version Ruby:"
-ruby -v
-echo "Version Bundler:"
-bundler -v
-install_mongodb.sh
-#!/bin/bash
-# Add key
-sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
-# Add REPO
-sudo bash -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list'
-# Refresh APT
-sudo apt update
-#Install MongoDB-3.2
-sudo apt install -y mongodb-org
-# Start MongoDB
-sudo systemctl start mongod
-# Add autostart MongoDB service
-sudo systemctl enable mongod
-deploy.sh
-#!/bin/bash
-# Clone
-git clone -b monolith https://github.com/express42/reddit.git
-# Install bundle
-cd reddit
-bundle install
-# Start server
-puma -d
-# Test app
-ps aux | grep puma
+	Узнаем Project-id командой gcloud projects list и вписываем в поле "project_id"
+	В файле будет производиться сборка системы с параметрами, после установки системы будут установлены с скриптов ruby и mongodb.
+	После создаться образ системы и удалиться система.
+	Прогоняем шаблон на ошибки  командой packer validate ./ubuntu16.json
+	и запускаем шаблон на сборку packer build ubuntu16.json
 
-Дополнительное задание
-Создание скрипта startup script. После поднятия инстанса, установка схем приложений
-startup_script.sh
-#!/bin/bash
-# Add key
-sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 -
-# Add REPO
-sudo bash -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xultiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list'
-# Refresh APT
-sudo apt update
-#Install MongoDB-3.2
-sudo apt install -y mongodb-org
-# Start MongoDB
-sudo systemctl start mongod
-# Add autostart MongoDB service
-sudo systemctl enable mongod
-# Status Sevice
-#sudo systemctl status mongod
-#!/bin/bash
-sudo apt update
-sudo apt install -y ruby-full ruby-bundler build-essential
-#echo "Version Ruby:"
-#ruby -v
-#echo "Vеrsion Bundler:"
-#bundler -v
-#!/bin/bash
-# Clone
-git clone -b monolith https://github.com/express42/reddit.gi
-# Install bundle
-cd reddit
-bundle install
-# Start server
-puma -d
-# Test app
-#ps aux | grep puma
+##      Пункт 3 //Деплоим приложение
+	В GCE создаем виртулку, выбираем в настрйоках boot disk, переходим в Custom image и выбираем наш образ
 
-Команда для запуска gcloud
-gcloud compute instances create reddit-test 
---boot-disk-size=10GB 
---zone europe-west2-b 
---image-family ubuntu-1604-lts 
---image-project=ubuntu-os-cloud 
---machine-type=g1-small 
---tags puma-server 
---metadata-from-file startup-script=/tmp/install.sh 
---restart-on-failure
+##      Пункт 4 //Установка зависимостей и запуск приложения	
+	Подключаемся по ссш и проверяем установку ruby и mongodb
+	git clone -b monolith https://github.com/express42/reddit.git
+	cd reddit && bundle install
+	puma -d
+	Заходим на выданый белый адрес на порт 9292 и удостоверяемся в работе приложения.
 
-Создание правила фаервола при помощи gcloud
-gcloud compute firewall-rules create default-puma-server 
---allow=tcp:9292 
---source-ranges=0.0.0.0/0 
---target-tags=puma-server
-#--# Задание
-testapp_IP = 35.246.108.51
-testapp_port = 9292
+##      Пункт 5 //Самостоятельные задания
+###	1. Были внесены изменения в файл ubuntu16.json:
+{
+  "variables": {
+	"gcp_builders_project_id": "infra-111304",
+	"gcp_builders_source_image": "ubuntu-1604-lts",
+	"gcp_builders_machine_type": "g1-small"
+  },
+	 "builders": [
+        {
+            "type": "googlecompute",
+            "project_id": "{{user `gcp_builders_project_id`}}",
+            "image_name": "reddit-base-{{timestamp}}",
+            "image_family": "reddit-base",
+            "source_image_family": "{{user `gcp_builders_source_image`}}",
+            "zone": "europe-west1-b",
+            "ssh_username": "appuser",
+        }
+    ],
+    "provisioners": [
+        {
+            "type": "shell",
+            "script": "scripts/install_ruby.sh",
+            "execute_command": "sudo {{.Path}}"
+        },
+        {
+            "type": "shell",
+            "script": "scripts/install_mongodb.sh",
+            "execute_command": "sudo {{.Path}}"
+        }
+    ]
+}
+
+###	2. Создадим шаблон variables.json
+{
+  "gcp_builders_project_id": "infra-111304",
+  "gcp_builders_source_image": "ubuntu-1604-lts",
+  "gcp_builders_machine_type": "g1-small",
+  "gcp_builders_disk_size": "10",
+  "gcp_builders_disk_type": "pd-ssd",
+  "gcp_builders_image_description": "Test Infra image HW#5",
+  "gcp_builders_tags": "puma-server"
+}
+###	3. Иследывания других обций
+{
+   "builders": [
+        {
+            "type": "googlecompute",
+            "project_id": "{{user `gcp_builders_project_id`}}",
+            "image_name": "reddit-base-{{timestamp}}",
+            "image_family": "reddit-base",
+            "source_image_family": "{{user `gcp_builders_source_image`}}",
+            "zone": "europe-west1-b",
+            "ssh_username": "appuser",
+            "machine_type": "{{user `gcp_builders_machine_type`}}",
+            "disk_size": "{{user `gcp_builders_disk_size`}}",
+            "disk_type": "{{user `gcp_builders_disk_type`}}",
+            "image_description": "{{user `gcp_builders_image_description`}}",
+            "tags": "{{user `gcp_builders_tags`}}",
+        }
+    ],
+    "provisioners": [
+        {
+            "type": "shell",
+            "script": "scripts/install_ruby.sh",
+            "execute_command": "sudo {{.Path}}"
+        },
+        {
+            "type": "shell",
+            "script": "scripts/install_mongodb.sh",
+            "execute_command": "sudo {{.Path}}"
+        }
+    ]
+}
+
+##      Пункт 6 //Задание со *
+	Необходимо запечь образ с работающей программой puma
+	Шаблон immutable.json находящейся в директории packer
+{
+  "builders": [
+         {
+                "type": "googlecompute",
+                "project_id": "{{user `gcp_builders_project_id`}}",
+                "image_name": "reddit-full-{{timestamp}}",
+                "image_family": "reddit-full",
+                "source_image_family": "{{user `gcp_builders_source_image`}}",
+                "zone": "europe-west3-b",
+                "ssh_username": "appuser",
+                "machine_type": "{{user `gcp_builders_machine_type`}}",
+                "disk_size": "{{user `gcp_builders_disk_size`}}",
+                "disk_type": "{{user `gcp_builders_disk_type`}}",
+                "image_description": "{{user `gcp_builders_image_description`}}",
+                "tags": "{{user `gcp_builders_tags`}}"
+         }
+      ],
+  "provisioners": [
+         {
+                "type": "shell",
+                "script": "scripts/install_ruby.sh",
+                "execute_command": "sudo {{.Path}}"
+         },
+         {
+                "type": "shell",
+                "script": "scripts/install_mongodb.sh",
+                "execute_command": "sudo {{.Path}}"
+         },
+         {
+                "type": "file",
+                "source": "files/reddit",
+                "destination": "~/raddit"
+         },
+         {
+                "type": "file",
+                "source": "files/puma.service",
+                "destination": "/tmp/puma.service"
+         },
+         {
+                "type": "shell",
+                "inline": [
+                "sudo mv /tmp/puma.service /etc/systemd/system/puma.service",
+                "sudo systemctl enable puma",
+                "cd ~/raddit",
+                "bundle install"
+                ]
+         }
+  ]
+}
+	
+	Дополнительный файлы в packer/files
+	Скачан заранее образ raddit который в provisioners копируеться на вновь созданый серер.
+	Для запуска приложения puma при старте системы используеться systemd unit. Создан файл puma.service
+[Unit]
+Description=Unit from puma
+After=network.target
+
+[Service]
+Type=simple
+
+WorkingDirectory=/home/appuser/raddit
+ExecStart=/usr/local/bin/pumactl start
+
+[Install]
+WantedBy=multi-user.target  
+
+	Который при деплое из шаблона копируеться в /tmp и после копируеться в /etc/systemd/system/puma.service
+	и активируеться в астостарте командой systemctl enable puma
+	
+	Для ускарения деплоя системы создан скрипт create-redditvm.sh в директории config-scripts
+	gcloud compute instances create reddit-test \
+--boot-disk-size=10GB \
+--zone europe-west2-b \
+--image-family reddit-full \
+--machine-type=g1-small \
+--tags puma-server \
+--restart-on-failure \
+
+После старта удостоверяемся что вход по http://***:9292 доступен.
