@@ -59,8 +59,7 @@ variable target_tags {
   description = "Teraget"
 }
 
-variable "url_map" {
-  description = "A reference (self_link) to the url_map resource to use."
-
+#variable "url_map" {
+#  description = "A reference (self_link) to the url_map resource to use."
   #  type        = string
-}
+#}

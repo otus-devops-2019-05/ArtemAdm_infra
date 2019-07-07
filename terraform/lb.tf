@@ -3,79 +3,79 @@ terraform {
   required_version = "0.11.7"
 }
 
-provider "google-beta" {
-  project = "${var.project}"
-  region  = "${var.region}"
-}
+#provider "google-beta" {
+#  project = "${var.project}"
+#  region  = "${var.region}"
+#}
 
-resource "google_compute_global_address" "default" {
-  project      = "${var.project}"
-  name         = "${var.name}-address"
-  ip_version   = "IPV4"
-  address_type = "EXTERNAL"
-}
+#resource "google_compute_global_address" "default" {
+#  project      = "${var.project}"
+#  name         = "${var.name}-address"
+#  ip_version   = "IPV4"
+#  address_type = "EXTERNAL"
+#}
 
 ###########URL
-resource "google_compute_url_map" "urlmap" {
-  project = "${var.project}"
+#resource "google_compute_url_map" "urlmap" {
+#  project = "${var.project}"
+#
+#  name        = "${var.name}-url-map"
+#  description = "URL map for ${var.name}"
 
-  name        = "${var.name}-url-map"
-  description = "URL map for ${var.name}"
+#  default_service = "google_compute_backend_bucket.static.self_link"
 
-  default_service = "google_compute_backend_bucket.static.self_link"
+# host_rule {
+#    hosts        = ["*"]
+#    path_matcher = "all"
+#  }
 
-  host_rule {
-    hosts        = ["*"]
-    path_matcher = "all"
-  }
+#  path_matcher {
+#    name            = "all"
+#    default_service = "google_compute_backend_bucket.static.self_link"
 
-  path_matcher {
-    name            = "all"
-    default_service = "google_compute_backend_bucket.static.self_link"
-
-    path_rule {
-      paths   = ["/api", "/api/*"]
-      service = "google_compute_backend_service.api.self_link"
-    }
-  }
-}
+#    path_rule {
+#      paths   = ["/api", "/api/*"]
+#      service = "google_compute_backend_service.api.self_link"
+#    }
+#  }
+#}
 
 # ------------------------------------------------------------------------------
 # IF PLAIN HTTP ENABLED, CREATE FORWARDING RULE AND PROXY
 # ------------------------------------------------------------------------------
 
-resource "google_compute_target_http_proxy" "http" {
-  count   = "${var.enable_http ? 1 : 0}"
-  project = "${var.project}"
-  name    = "${var.name}-http-proxy"
-  url_map = "${var.url_map}"
-}
+#resource "google_compute_target_http_proxy" "http" {
+#  count   = "${var.enable_http ? 1 : 0}"
+#  project = "${var.project}"
+#  name    = "${var.name}-http-proxy"
+#  url_map = "${var.url_map}"
+#}
 
-resource "google_compute_global_forwarding_rule" "http" {
-  provider   = "google-beta"
-  count      = "${var.enable_http ? 1 : 0}"
-  project    = "${var.project}"
-  name       = "${var.name}-http-rule"
-  target     = "google_compute_target_http_proxy.http[0].self_link"
-  ip_address = "google_compute_global_address.default.address"
-  port_range = "${var.service_port}"
-  alias      = "gbeta-us-west1"
-  labels     = "${var.custom_labels}"
-}
+#resource "google_compute_global_forwarding_rule" "http" {
+#  provider   = "google-beta"
+#  count      = "${var.enable_http ? 1 : 0}"
+#  project    = "${var.project}"
+#  name       = "${var.name}-http-rule"
+#  target     = "google_compute_target_http_proxy.http[0].self_link"
+#  ip_address = "google_compute_global_address.default.address"
+#  port_range = "${var.service_port}"
+#  alias      = "gbeta-us-west1"
+#  labels     = "${var.custom_labels}"
+#}
 
-resource "google_compute_firewall" "default-lb-fw" {
-  project = "${var.project}"
-  name    = "${var.name}-vm-service"
-  network = "default"
+#resource "google_compute_firewall" "default-lb-fw" {
+#  project = "${var.project}"
+#  name    = "${var.name}-vm-service"
+#  network = "default"
 
-  allow {
-    protocol = "tcp"
-    ports    = ["${var.service_port}"]
-  }
+#  allow {
+#    protocol = "tcp"
+#    ports    = ["${var.service_port}"]
+#  }
 
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["${var.target_tags}"]
-}
+#  source_ranges = ["0.0.0.0/0"]
+#  target_tags   = ["${var.target_tags}"]
+#}
 
 # ------------------------------------------------- -----------------------------
 # СОЗДАЙТЕ ГРУППУ INSTANCE С ОДНОЙ ИНСТАНЦИЕЙ И КОНФИГУРАЦИЕЙ ОБСЛУЖИВАНИЯ BACKEND
