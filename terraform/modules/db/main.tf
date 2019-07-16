@@ -25,21 +25,21 @@ resource "google_compute_instance" "db" {
 #  name = "db-ip"
 #}
 
-resource "google_compute_network" "subnet" {
-  name = "my-net"
-}
+#resource "google_compute_network" "subnet" {
+#  name = "my-net"
+#}
 
-resource "google_compute_subnetwork" "subnet" {
-  name          = "my-subnet"
-  ip_cidr_range = "172.16.12.0/24"
-  region        = "europe-west2"
-  network       = "${google_compute_network.subnet.self_link}"
-}
+#resource "google_compute_subnetwork" "subnet" {
+#  name          = "my-subnet"
+#  ip_cidr_range = "172.16.12.0/24"
+#  region        = "europe-west2"
+#  network       = "${google_compute_network.subnet.self_link}"
+#}
 
-resource "google_compute_address" "internal_with_subnet_and_address" {
-  name         = "my-internal-address"
-  subnetwork   = "${google_compute_subnetwork.subnet.self_link}"
-  address_type = "INTERNAL"
-  address      = "172.16.12.11"
-  region       = "europe-west2"
-}
+#resource "google_compute_address" "internal_with_subnet_and_address" {
+#  name         = "my-internal-address"
+#  subnetwork   = "${google_compute_subnetwork.subnet.self_link}"
+#  address_type = "INTERNAL"
+#  address      = "172.16.12.11"
+#  region       = "europe-west2"
+#}

@@ -18,7 +18,7 @@ variable db_name_instance {
   default     = "reddit-db"
 }
 
-variable name-ip {
-  description = "privat ip"
-}
+#variable name-ip {
+#  description = "privat ip"
+#}
 
