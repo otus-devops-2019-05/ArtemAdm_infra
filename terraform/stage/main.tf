@@ -24,7 +24,7 @@ module "db" {
   db_name_instance = "stage-reddit-db"
   public_key_path  = "${var.public_key_path}"
 #  zone             = "${var.zone}"
-  name-ip          = "stage"
+#  name-ip          = "stage"
   db_disk_image    = "${var.db_disk_image}"
 }
 
