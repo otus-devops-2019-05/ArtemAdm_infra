@@ -1,301 +1,294 @@
 # ArtemAdm_infra
 
-# Выполнено ДЗ №6 Практика IaC использованием Terraform
-
+# Выполнено ДЗ №7 Принципы организации инфраструктурного кода и работа над инфраструктурой в команде на примере Terraform.
  - [v] Основное ДЗ
  - [V] Задание со *
  - [] Задание со **
 
 ## В процессе сделано:
- - Пункт 1 // Установка Terraform
- - Пункт 2 // Развитие проекта Infra
- - Пункт 3 // Настройка SSH
- - Пункт 4 // Настройка Firewall
- - Пункт 5 // Настройка Provisioners
- - Пункт 6 // Variables
- - Пункт 7 // Самостоятельные задания
- - Пункт 8 // Задание с *
- - Пункт 9 // Задание с **
-##	Пункт 1 // Установка Terraform
-	Скачиваем terrafom версии 0.11.11 с офсайта(https://www.terraform.io/downloads.html) под нужную ОС. wget https://releases.hashicorp.com/terraform/0.11.11/terraform_0.11.11_linux_amd64.zip
-	Распаковываем  архив unzip и установочный файл помещаем в PATH /usr/bin/
-	Проверяем версию terraform -v
+ - Пункт 1 // Правила файервола
+ - Пункт 2 // Взаимосвязи ресурсов
+ - Пункт 3 // Структуризация ресурсов
+ - Пункт 4 // Модули
+ - Пункт 5 // Параметризация модулей
+ - Пункт 6 // Задание со *
+ - Пункт 7 // Задание со **
 
-##      Пункт 2 // Развитие проекта Infra
-	Создаем директорию terraform и в ней главный конфигаруционный файл main.tf
+##	Пункт 1 // Правила файервола
+	Просматриваем правила в фаерволе gcloud - gcloud compute firewall-rules list
+	При помощи команды import добавляем информацию о созданом без помощи Terraform ресурсе в state файл.
+	terraform import google_compute_firewall.firewall_ssh default-allow-ssh
 	
-	terraform {
-	# Версия terraform
-	required_version = "0.11.11"	}
-	provider "google" {
-	# Версия провайдера
-	version = "2.0.0"
-	# ID проекта
-	project = "${var.project}"
-	reg
+##      Пункт 2 // Взаимосвязи ресурсов
+	Задаем IP адрес для app  в виде внешнего ресурса
+	resource "google_compute_address" "app_ip" {
+	  name = "reddit-app-ip"  }
+
+	Добавляем созданный IP к нашему app
+	network_interface {
+	  network = "default"
+	  access_config = {
+	  nat_ip = "${google_compute_address.app_ip.address}"  }  }
+##      Пункт 3 // Структуризация ресурсов
+	Вынесем БД на отдельный инстанс VM. В директории packer создаем 2 шаблона db.json и app.json.
+	db.json	
+{   "builders": [        {
+            "type": "googlecompute",
+            "project_id": "{{user `gcp_builders_project_id`}}",
+            "image_name": "reddit-base-db",
+            "image_family": "reddit-base",
+            "source_image_family": "{{user `gcp_builders_source_image`}}",
+            "zone": "europe-west1-b",
+            "ssh_username": "appuser",
+            "machine_type": "{{user `gcp_builders_machine_type`}}",
+            "disk_size": "{{user `gcp_builders_disk_size`}}",
+            "disk_type": "{{user `gcp_builders_disk_type`}}",
+            "image_description": "{{user `gcp_builders_image_descriptiondb`}}",
+            "tags": "{{user `gcp_builders_tags`}}"        }    ],
+	    "provisioners": [
+            {            "type": "shell",
+            "script": "scripts/install_mongodb.sh",
+            "execute_command": "sudo {{.Path}}"        }    ]  }
+
+	app.json
+	{   "builders": [        {
+            "type": "googlecompute",
+            "project_id": "{{user `gcp_builders_project_id`}}",
+            "image_name": "reddit-base-app",
+            "image_family": "reddit-base",
+            "source_image_family": "{{user `gcp_builders_source_image`}}",
+            "zone": "europe-west1-b",
+            "ssh_username": "appuser",
+            "machine_type": "{{user `gcp_builders_machine_type`}}",
+            "disk_size": "{{user `gcp_builders_disk_size`}}",
+            "disk_type": "{{user `gcp_builders_disk_type`}}",
+            "image_description": "{{user `gcp_builders_image_descriptionapp`}}",
+            "tags": "{{user `gcp_builders_tags`}}"        }    ],
+	    "provisioners": [        {
+            "type": "shell",
+            "script": "scripts/install_ruby.sh",
+            "execute_command": "sudo {{.Path}}"        }    ]  }
+
+	Проверяем на валидность конфиги packer validate -var-file=variables.json app.json и packer validate -var-file=variables.json db.json. Создаем образы packer build -var-file=variables.json app.json и packer build -var-file=variables.json db.json
+	
+	Разбиваем конфиг main.tf на несколько конфигов. В конфиге app.tf вынесем конфигурацию VM APP в конфиге db.tf соответсвенно VM DB
+	app.tf
 	resource "google_compute_instance" "app" {
 	name = "reddit-app"
 	machine_type = "g1-small"
-	zone = "europe-west1-b"
-	# определение загрузочного диска
+	zone = "${var.zone}"
+	tags = ["reddit-app"]
+	boot_disk {
+	initialize_params { image = "${var.app_disk_image}" }  }
+	network_interface {
+	network = "default"
+	access_config = {
+	nat_ip = "${google_compute_address.app_ip.address}"  }  }
+	metadata {
+	ssh-keys = "appuser:${file(var.public_key_path)}"  }  }
+	resource "google_compute_address" "app_ip" { name = "reddit-app-ip" }
+	resource "google_compute_firewall" "firewall_puma" {
+	name = "allow-puma-default"
+	network = "default"
+	allow {
+	protocol = "tcp", ports = ["9292"]  }
+	source_ranges = ["0.0.0.0/0"]
+	target_tags = ["reddit-app"]  }
+
+	Наполняем файл variables.tf новой переменной
+	variable app_disk_image {
+	description = "Disk image for reddit app"
+	default = "reddit-app-base"  }
+
+	db.tf
+	resource "google_compute_instance" "db" {
+	name = "reddit-db"
+	machine_type = "g1-small"
+	zone = "${var.zone}"
+	tags = ["reddit-db"]
 	boot_disk {
 	initialize_params {
-	image = "reddit-base"	}	}
-	# определение сетевого интерфейса
+	image = "${var.db_disk_image}"  }  }
 	network_interface {
-	# сеть, к которой присоединить данный интерфейс
 	network = "default"
-	# использовать ephemeral IP для доступа из Интернет
-	access_config {}	}	}
-
-	Загружаем провайдера terraform init
-	Проверяем конфиг на ошибки terraform plan
-	Если ошибок не обнаружено запускаем установку terraform apply
-
-##      Пункт 3 // SSH
-	Узнаем IP командой terraform show | grep nat_ip
-	Добавляем медатаные ssh ключа в main файл
+	access_config = {}  }
 	metadata {
-	# путь до публичного ключа
-	ssh-keys = "appuser:${file("~/.ssh/appuser.pub")}"	}
-	
-	Проверяем на наличие ошибок конфи terraform plan и устанавливаем изминения terraform apply
-	После подключаемся по ssh к серверу ssh appuser@<внешний_IP>
-	
-	Создаем outputs.tf и приводим к виду:
-	output "app_external_ip" {
-	value = "${google_compute_instance.app.network_interface.0.access_config.0.nat_ip}"}
+	ssh-keys = "appuser:${file(var.public_key_path)}"  }  }
+	resource "google_compute_firewall" "firewall_mongo" {
+	name = "allow-mongo-default"
+	network = "default"
+	allow {
+	protocol = "tcp"
+	ports = ["27017"]  }
+	target_tags = ["reddit-db"]
+	source_tags = ["reddit-app"]  }
 
-	Обновляем переменую terraform refresh
-	Можем теперь узнать IP адрес командой terraform output
+	Наполняем файл variables.tf новой переменной
+	variable db_disk_image {
+	description = "Disk image for reddit db"
+	default = "reddit-db-base"  }
 
-	Проверяем на наличие ошибок конфи terraform plan и устанавливаем изминения terraform apply
-	Добавляем Тег к ресурсу 
-	resource "google_compute_instance" "app" {
-	tags = ["reddit-app"]}
-	
-	Проверяем на наличие ошибок конфи terraform plan и устанавливаем изминения terraform apply
+	Создаем файл vpc.tf и вынесем правилл фаервола для ssh доступа, которое применимо для всех инстансов нашей сети
+	resource "google_compute_firewall" "firewall_ssh" {
+	name = "default-allow-ssh"
+	network = "default"
+	allow {
+	protocol = "tcp"
+	ports = ["22"]  }
+	source_ranges = ["0.0.0.0/0"]  }
 
-##      Пункт 4 // Firewall
-	Создаем правило в фаерволе. В main добавляем раздел
+	файл main.tf у нас дожен остаться следующим
+	provider "google" {
+	version = "2.0.0"
+	project = "${var.project}"
+	region = "${var.region}"  }
 
-        resource "google_compute_firewall" "firewall_puma" {
-        name = "allow-puma-default"
-        # Название сети, в которой действует правило
-        network = "default"
-        # Какой доступ разрешить
-        allow {
-        protocol = "tcp"
-        ports = ["9292"]	}
-        # Каким адресам разрешаем доступ
-        source_ranges = ["0.0.0.0/0"]
-        # Правило применимо для инстансов с перечисленными тэгами
-        target_tags = ["reddit-app"]        }
+	Применяем настройки terraform apply. После успешного создания ресурсов удаляем  terraform destroy
 
-        Проверяем на наличие ошибок конфи terraform plan и устанавливаем изминения terraform apply
-        Добавляем Тег к ресурсу
-        resource "google_compute_instance" "app" {
-        tags = ["reddit-app"]	}
-
-        Проверяем на наличие ошибок конфи terraform plan и устанавливаем изминения terraform apply
-        Добавляем Тег к ресурсу
-        resource "google_compute_instance" "app" {
-        tags = ["reddit-app"]   }
-
-        Проверяем на наличие ошибок конфи terraform plan и устанавливаем изминения terraform apply
-
-##      Пункт 5 // Provisioners	
-	Указываем провидинеру скопировать локальный файл в указаное место на удаленном хосте
-
-	provisioner "file" {
-	source = "files/puma.service"
-	destination = "/tmp/puma.service" }
-
-	Создаем папку files в директории terraform и создаем файл puma.service
-
-	[Unit]
-	Description=Puma HTTP Server
-	After=network.target
-	[Service]
-	Type=simple
-	User=appuser
-	WorkingDirectory=/home/appuser/reddit
-	ExecStart=/bin/bash -lc 'puma'
-	Restart=always
-	[Install]
-	WantedBy=multi-user.target
-	
-	Добавляем еще один провинжинер для деплоя приложения 
-	
-	provisioner "remote-exec" {
-	script = "files/deploy.sh" }
-
-	Создаем файл deploy.sh в директории terraform/files c содержимым
-	#!/bin/bash
-	set -e
-	APP_DIR=${1:-$HOME}
-	git clone -b monolith https://github.com/express42/reddit.git $APP_DIR/reddit
-	cd $APP_DIR/reddit
-	bundle install
-	sudo mv /tmp/puma.service /etc/systemd/system/puma.service
-	sudo systemctl start puma
-	sudo systemctl enable puma
-
-	Перед блоком провинжинеров добавляем параметр подключения к VM
-
-	connection {
-	type = "ssh"
-	user = "appuser"
-	agent = false
-	# путь до приватного ключа
-	private_key = "${file("~/.ssh/appuser")}"  }
-
-	Проверяем на наличие ошибок конфи terraform plan и устанавливаем изминения terraform apply
-	
-	Проверяем работу приложения, указываем в браузере наш внешний IP и порт 9292
-
-##      Пункт 6 //  Input vars
-	Создаем файл variables.tf в директории terraform для параметризирования конфигурационого файла и определяем переменные
-
-	variable project {
-	description = "Project ID"	}
-	variable region {
-	description = "Region"
-	# Значение по умолчанию
-	default = "europe-west1"	}
-	variable public_key_path {
-	# Описание переменной
-	description = "Path to the public key used for ssh access"	}
-	variable disk_image {
-	description = "Disk image"	}
-
-	В файле main теперь указываем переменные
-
+##      Пункт 4 // Модули 
+	В каталоге terraform создаем директорию modules. В директории modules создаем директории db, app. Переносим (mv) db.tf в modules/db/main.tf. Затем определим переменные, которые у нас используются в db.tf и объявляются в variables.tf в файл переменных модуля modules/db/variables.tf
+	С app делаем так же.
+	Файл outputs.tf переносим в modules/app/outputs.tf
+	В файл main.tf, где у нас определен провайдер вставим секции вызова созданных нами модулей.
 	provider "google" {
 	version = "2.0.0"
 	project = "${var.project}"
 	region = "${var.region}"	}
+	module "app" {
+	source = "modules/app"
+	public_key_path = "${var.public_key_path}"
+	zone = "${var.zone}"
+	app_disk_image = "${var.app_disk_image}"  }
+	module "db" {
+	source = "modules/db"
+	public_key_path = "${var.public_key_path}"
+	zone = "${var.zone}"
+	db_disk_image = "${var.db_disk_image}"  }
+
+	Загружаем модули командой terraform get
+	можем убедиться что модули подгруженны tree .terraform
 	
-	boot_disk {
-	initialize_params {
-	image = "${var.disk_image}"	}	}
+	В файле outputs.tf изменяем текс на следующий, этим самым указываем на обработку IP с файл в модуел
+	output "app_external_ip" {
+	value = "${module.app.app_external_ip}"	}
+###	Самостоятельное задание
+	Создаем модул VPC, определяем настройки фаервола в нем
+	../modules/vpc/main.tf
+	resource "google_compute_firewall" "firewall_ssh" {
+	  name = "${var.name-frw}-allow-ssh"
+	  network = "default"
+	  allow {
+	    protocol = "tcp"
+	    ports    = ["22"]	  }
+	  source_ranges = "${var.source_ranges}"	}
 
-	metadata {
-	ssh-keys = "appuser:${file(var.public_key_path)}"	}
+	main.tf
+	module "vpc" {
+	  source        = "../modules/vpc"
+	  name-frw      = "stage"
+	  source_ranges = ["0.0.0.0/0"]	}
 
-	Определяем переменые используя файл terraform.tfvars из которого terraform загружает значения автоматически. наполняем его следующими значениями
+	Проверяем подключение по ssh. на наш внешний IP
+##      Пункт 5 // Параметризация модулей
+	В созданном модуле vpc используем переменную для конфигурации допустимых адресов.
+	terraform/vpc/main.tf
+	resource "google_compute_firewall" "firewall_ssh" {
+	name = "default-allow-ssh"
+	network = "default"
+	allow {
+	protocol = "tcp"
+	ports = ["22"]	}
+	source_ranges = "${var.source_ranges}"	}
 
-	project = "infra-179015"
-	public_key_path = "~/.ssh/appuser.pub"
-	disk_image = "reddit-base"
+	terraform/vpc/variables.tf
+	variable source_ranges {
+	description = "Allowed IP addresses"
+	default = ["0.0.0.0/0"]	}
 
-	Финальная проверка. Удаляем ресурсы terraform destroy
-	Проверяем на наличие ошибок конфи terraform plan и устанавливаем изминения terraform apply
-	Проверяем работу приложения, указываем в браузере наш внешний IP и порт 9292		
-
-##      Пункт 7 //  Самостоятельные задания
-###     1. Определите input переменную для приватного ключа, использующегося в определении подключения для провижинеров (connection); 
-	metadata {
-	ssh-keys = "appuser:${file(var.public_key_path)}"	}
-
-###	2. Определите input переменную для задания зоны в ресурсе "google_compute_instance" "app". У нее * должно быть значение по умолчанию*;
-	zone         = "${var.zone}"
-	в файл variables.tf задаем значения 
-
-	variable region {
-	description = "Region"
-	default = "europe-west1"	}
-
-###	3. Отформатируйте все конфигурационные файлы используя команду terraform fmt;
-	в папке terraform вводим команду
-	terraform fmt 
+	Теперь мы можем задавать диапазоны IP адресов для правила файервола при вызове модуля.
+	terraform/main.tf
+	module "vpc" {
+	source = "modules/vpc"
+	source_ranges = ["80.250.215.124/32"]	}
+	# вводим вместо 80.250.215.124 свой паблик IP
 	
-	Тем самым terraform приводит в правильный вид конфиги.
+###	Самостоятельное задание
+	1. Изменил IP на любой не свой IP, подключиться не удалось
+	2. После возвращения своего IP, подключение по ssh стало доступно 
+	3. Вернул  0.0.0.0/0 в source_ranges. 
+	
+##      Пункт 6 //Задание со *
+###     1. Настройте хранение стейт файла в удаленном бекенде (remote backends) для окружений stage и prod, используя Google Cloud Storage в качестве бекенда. Описание бекенда нужно вынести в отдельный файл backend.tf
+	В папке stage создан файл:
+	terraform {
+	  backend "gcs" {
+	    bucket = "storage-bucket-adv2"
+	    prefix = "stage" }  }
 
-###     4. Так как в репозиторий не попадет ваш terraform.tfvars, то нужно сделать рядом файл terraform.tfvars.example, в котором будут указаны переменные для образца.
-	Выполенено
+	В папке prod создан файл:
+	terraform {
+	  backend "gcs" {
+	    bucket = "storage-bucket-adv"
+	    prefix = "stage" }	}
 
-##      Пункт 8 //Задание со *
-###     1. Опишите в коде терраформа добавление ssh ключа пользователя appuser1 в метаданные проекта. Выполните terraform apply и проверьте результат (публичный ключ можно брать пользователя appuser)
-	ssh-keys = "appuser1:${file(var.app1_public_key_path)}"
-###     2. Опишите в коде терраформа добавление ssh ключей нескольких пользователей в метаданные проекта (можно просто один и тот же публичный ключ, но с разными именами пользователей, например appuser1, appuser2 и т.д.).
-	ssh-keys = "appuser:${file(var.public_key_path)} \nappuser1:${file(var.app1_public_key_path)}"
-###     3. Добавьте в веб интерфейсе ssh ключ пользователю appuser_web в метаданные проекта
-	resource "google_compute_project_metadata_item" "sshKeys" {
-	key   = "sshKeys"
-	value = "appuser_web:${file(var.web_publickey)}"	}
-	Проблем не было обнаруженно ...
-##	Пункт 9 //Задание с **
-Создайте файл lb.tf и опишите в нем в коде terraform создание HTTP балансировщика, направляющего трафик на наше развернутое приложение на инстансе reddit-app. Проверьте доступность приложения по адресу балансировщика. Добавьте в output переменные адрес балансировщика.
-	Создаем в файле lb.tf 
+	Запускаем в каждой папке команду terraform init, после конфигурационный файл terraform.tfstate переноситься в бакет 
+###     2. Перенесите конфигурационные файлы Terraform в другую директорию (вне репозитория). Проверьте, что state-файл (terraform.tfstate) отсутствует. Запустите Terraform в обеих директориях и проконтролируйте, что он "видит" текущее состояние независимо от директории, в которой запускается 
+	Проверяем что файл terraform.tfstate отсутвует в папках stage и prod. Удаляем конфигурацию терраформа terraform destroy и создаем заного terraform apply. Всё работает. 
+###     3. Попробуйте запустить применение конфигурации одновременно, чтобы проверить работу блокировок
+	Все блоки firewall были перенесены в terraform/modules/vpc/main.tf и добавлены переменные var.name-frw (идея в том что variables обозначает stage или prod) и при создании одновременно двух конфигураций terraform фаервол не будет писать об ошибках что имееться уже такое правило firewall  
+	resource "google_compute_firewall" "firewall_ssh" {
+	  name = "${var.name-frw}-allow-ssh"
+	  network = "default"
+	  allow {
+	    protocol = "tcp"
+	    ports    = ["22"]  }
+	  source_ranges = "${var.source_ranges}"  }
+	resource "google_compute_firewall" "firewall_puma" {
+	  name    = "${var.name-frw}-puma-firewall"
+	  network = "default"
+	  allow {
+	    protocol = "tcp"
+	    ports    = ["9292"]  }
+	  source_ranges = ["0.0.0.0/0"]
+	  target_tags   = ["reddit-app"]  }
+	resource "google_compute_firewall" "firewall_mongo" {
+	  name    = "${var.name-frw}allow-mongo-default"
+	  network = "default"
+	  allow {
+	    protocol = "tcp"
+	    ports    = ["27017"]  }
+	  target_tags = ["reddit-db"]
+	  source_tags = ["raddit-app"]  }
 
-	resource "google_compute_instance_group" "api" {
-	project = "${var.project}"
-	name    = "${var.name}-instance-group"
-	zone    = "${var.zone}"
-	instances = [ "${google_compute_instance.api.self_link}",	]
-	lifecycle {
-	create_before_destroy = true	}
-	named_port {
-	name = "http"
-	port = 80	}	}
+	Добавление в файл конфигурации terraform/modules/app/main.tf переменной в блок app_ip, смысл такой же как и выше
+	resource "google_compute_address" "app_ip" {
+	  name = "${var.name-ip}-app-ip"  }
 
-	resource "google_compute_instance" "api" {
-	project      = "${var.project}"
-	name         = "${var.name}-instance"
-	machine_type = "f1-micro"
-	zone         = "${var.zone}"
-	 ### Мы помечаем экземпляр тегом, указанным в правиле брандмауэра
-	tags = ["reddit-app"]
-	boot_disk {
-	initialize_params {
-	image = "${var.disk_image}"	}	}
+	Была обнаружена проблема что в бесплатной версии GCP на один регион указать статический IP только один. Выход из этой ситуации следующий:
+	В файл terraform/stage/main.tf регион и зона europe-west2
+	region  = "europe-west2"
+	zone    = "europe-west2-b"
 
-	### Убедитесь, что у нас запущено колба
-	metadata {
-	ssh-keys = "appuser:${file(var.public_key_path)} \nappuser1:${file(var.app1_public_key_path)}"	}
+	и в модуле firewall указана имя "stage" 
+	module "vpc" {
+	  source        = "../modules/vpc"
+	  name-frw      = "stage"
+	  source_ranges = ["0.0.0.0/0"]  }
+	
+	В файл terraform/stage/main.tf параметры зоны и региона остаються дефолтными
+	В модуле app и firewall указана имя "prod"
+	module "app" {
+	...
+	name-ip             = "prod"
+	...
 
-	connection {
-	type  = "ssh"
-	user  = "appuser"
-	agent = false
+	module "vpc" {
+	...
+	  name-frw          = "prod"
+	...
 
-	# путь до приватного ключа
-	private_key = "${file(var.privat_key_path)}"	}
-
-	# Запустить экземпляр в подсети по умолчанию
-	network_interface {
-	subnetwork = "default"
-
-	# Это дает экземпляру публичный IP-адрес для подключения к интернету. Обычно у вас будет Cloud NAT,
-	# но ради простоты мы назначаем публичный IP для подключения к интернету
-	# чтобы иметь возможность запускать сценарии запуска
-	access_config {}	}	}
-
-	resource "google_compute_backend_service" "api" {
-	name      = "staging-service"
-	port_name = "http"
-	protocol  = "HTTP"
-
-	backend {
-	group = "${google_compute_instance_group.api.self_link}"	}
-
-	health_checks = [ "${google_compute_http_health_check.staging_health.self_link}" ]
-	#  depends_on = [
-	#    "${google_compute_instance_group.api}"
-	#  ]
-	}
-
-	resource "google_compute_http_health_check" "staging_health" {
-	name = "${var.name}-hc"
-
-	#  request_path = "/health_check"
-	#http_health_check {
-	port = 80
-	request_path = "/api"
-	check_interval_sec = 5
-	timeout_sec        = 5	}
-
-
-	Удалось создать instance group и backend. К сожалению больше сил и времени нету на это ДЗ :(
+	После всех настроек одновременно запускаються две конфигурации terraform
+##	Пункт 7 //Задание с **
+###	1. Добавьте необходимые provisioner в модули для деплоя и работы приложения. Файлы, используемые в provisioner, должны находится в директории модуля.
+###	2. Опционально можете реализовать отключение provisioner в зависимости от значения переменной
 
