@@ -11,7 +11,7 @@ resource "google_compute_instance" "db" {
   }
 
   network_interface {
-   network       = "subnet"
+   network       = "default"
     access_config = {}
 #     network_ip = "${google_compute_address.db_ip.address}"
   }
