@@ -1,0 +1,5 @@
+[app]
+stage-reddit-app ansible_host=35.246.24.95
+[db]
+stage-reddit-db ansible_host=35.246.26.80
+
