@@ -1,0 +1,38 @@
+---
+- name: MongoDB
+  hosts: all
+  become: true
+  tasks:
+    - name: Add an apt key by id from a keyserver
+      apt_key:
+        id: EA312927
+        keyserver: keyserver.ubuntu.com
+
+    - name: Add specified repository into sources list.
+      apt_repository:
+        repo: deb [ arch=amd64,arm64 ] http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse
+        state: present
+
+    - name: "APT: Install aptitude package"
+      apt:
+        name: aptitude
+        force_apt_get: yes
+
+    - name: "Update Cache"
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+        allow_unauthenticated: yes
+
+    - name: Install MongoDB
+      apt:
+        update_cache: true
+        name: mongodb-org
+        allow_unauthenticated: yes        
+        state: present
+        
+    - name: enable service httpd and ensure it is not masked
+      systemd:
+        name: mongod
+        enabled: yes
+        masked: no
