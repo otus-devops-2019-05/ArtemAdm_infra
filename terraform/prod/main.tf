@@ -28,5 +28,5 @@ module "db" {
 module "vpc" {
   source            = "../modules/vpc"
   name-frw          = "prod"
-  source_ranges     = ["77.52.206.86/32"]
+  source_ranges     = ["77.52.206.86/32", "46.164.140.50/32"]
 }

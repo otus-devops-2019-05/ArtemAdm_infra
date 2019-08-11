@@ -1,15 +1,16 @@
 # ArtemAdm_infra
 
-# Выполнено ДЗ №9 Деплой и управление конфигурацией с Ansible
+# Выполнено ДЗ №10 Ansible:работа с ролями и окружениями
 
  - [v] Основное ДЗ
  - [] Задание со *
+ - [] Задание со **
 
 ## В процессе сделано:
- - Пункт 1 // Используем плейбуки, хендлеры и шаблоны для конфигурации окружения и деплоя тестового приложения. Подход один плейбук, один сценарий (play)
- - Пункт 2 // Аналогично один плейбук, но много сценариев
- - Пункт 3 // И много плейбуков.
- - Пункт 4 // Изменим провижн образов Packer на Ansible-плейбуки
+ - Пункт 1 // Переносим созданные плейбуки в раздельные роли
+ - Пункт 2 // Описываем два окружения
+ - Пункт 3 // Используем коммьюнити роль nginx
+ - Пункт 4 // Используем Ansible Vault для наших окружений
 
 ##	Как запустить проект:
  - terraform apply
@@ -17,13 +18,15 @@
 ##	Как проверить работоспособность:
 	ansible app -m ping
 	ansible db -m ping
-	ansible all -m ping -i inventory.yml
+	ansible all -m ping -i environments/stage/inventory
+	ansible all -m ping -i environments/prod/inventory
 	
-	ansible app -m shell -a 'ruby -v; bundler -v'
-	ansible db -m command -a 'systemctl status mongod'
+	прописываем "дейсвующие IP" ansible/environments/stage/inventory иди ansible/environments/prod/inventory
+	добавляем в файле ansible/environments/stage/group_vars/app db_host: "IP хоста" базы данных
 
-	прописываем дейсвующие IP ansible/inventory
-	добавляем в файле ansible/app.yml db_host: IP хоста базы данных
+	ansible-playbook playbook/site.yml (stage)
+	ansible-playbook -i environments/prod/inventory  playbook/site.yml
+	Заходим по "IP app":80 и убеждаемся что работает приложение и есть доступ к базе
 
-	ansible-playbook site.yml
-	Заходим по IP app:9292 и убеждаемся что работает приложение и есть доступ к базе
+	Подключаемся по ssh "IP app"
+	su admin и вводим passwd который задавали.
