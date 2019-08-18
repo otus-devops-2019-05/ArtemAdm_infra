@@ -27,7 +27,7 @@
       apt:
         update_cache: true
         name: mongodb-org
-        allow_unauthenticated: yes        
+        allow_unauthenticated: yes
         state: present
       tags: install
 
