@@ -7,26 +7,23 @@
  - [] Задание со **
 
 ## В процессе сделано:
- - Пункт 1 // Переносим созданные плейбуки в раздельные роли
- - Пункт 2 // Описываем два окружения
- - Пункт 3 // Используем коммьюнити роль nginx
- - Пункт 4 // Используем Ansible Vault для наших окружений
+ - Пункт 1 // Локальная разработка при помощи Vagrant, доработка ролей для провижининга в Vagrant
+ - Пункт 2 // Тестирование ролей при помощи Molecule и Testinfra
+ - Пункт 3 // Переключение сбора образов пакером на использование ролей
 
 ##	Как запустить проект:
- - terraform apply
+ - vagrant up
+ - molecule create
 
 ##	Как проверить работоспособность:
-	ansible app -m ping
-	ansible db -m ping
-	ansible all -m ping -i environments/stage/inventory
-	ansible all -m ping -i environments/prod/inventory
+	vargrant status
+	vagrant ssh appserver
+	  telnet 10.10.10.10 27017
+	vagrant ssh dbserver
+	curl 10.10.10.20:9292
+
+	molecule list
+	molecule login -h instance
+	molecule verify 
+
 	
-	прописываем "дейсвующие IP" ansible/environments/stage/inventory иди ansible/environments/prod/inventory
-	добавляем в файле ansible/environments/stage/group_vars/app db_host: "IP хоста" базы данных
-
-	ansible-playbook playbook/site.yml (stage)
-	ansible-playbook -i environments/prod/inventory  playbook/site.yml
-	Заходим по "IP app":80 и убеждаемся что работает приложение и есть доступ к базе
-
-	Подключаемся по ssh "IP app"
-	su admin и вводим passwd который задавали.
